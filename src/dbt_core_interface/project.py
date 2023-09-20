@@ -6215,6 +6215,11 @@ if lint_command:
                     if request.query.get("extra_config_path")
                     else None
                 ),
+                config_last_modification=(
+                    request.query.get("config_last_modification")
+                    if request.query.get("config_last_modification")
+                    else None
+                ),
             )
             result = temp_result["violations"] if temp_result is not None else []
         except Exception as lint_err:

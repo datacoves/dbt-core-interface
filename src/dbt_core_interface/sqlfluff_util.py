@@ -17,7 +17,9 @@ def get_linter(
 ):
     """Get linter."""
     from sqlfluff.cli.commands import get_linter_and_formatter
+
     return get_linter_and_formatter(config, stream)[0]
+
 
 # Cache config to prevent wasted frames
 @lru_cache(maxsize=50)
@@ -26,6 +28,7 @@ def get_config(
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
     require_dialect: bool = True,
+    config_last_modification: Optional[str] = None,
     **kwargs,
 ) -> FluffConfig:
     """Similar to the get_config() function used by SQLFluff command line.
@@ -65,6 +68,7 @@ def lint_command(
     sql: Union[Path, str],
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
+    config_last_modification: Optional[str] = None,
 ) -> Optional[Dict]:
     """Lint specified file or SQL string.
 
@@ -86,6 +90,7 @@ def lint_command(
             project_root,
             extra_config_path,
             ignore_local_config,
+            config_last_modification,
             require_dialect=False,
             nocolor=True,
         )
@@ -112,6 +117,7 @@ def test_lint_command():
     """
     logging.basicConfig(level=logging.DEBUG)
     from dbt_core_interface.project import DbtProjectContainer
+
     dbt = DbtProjectContainer()
     dbt.add_project(
         name_override="dbt_project",
