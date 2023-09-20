@@ -27,8 +27,8 @@ def get_config(
     dbt_project_root: Path,
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
-    require_dialect: bool = True,
     config_last_modification: Optional[str] = None,
+    require_dialect: bool = True,
     **kwargs,
 ) -> FluffConfig:
     """Similar to the get_config() function used by SQLFluff command line.
@@ -90,7 +90,7 @@ def lint_command(
             project_root,
             extra_config_path,
             ignore_local_config,
-            config_last_modification,
+            config_last_modification
             require_dialect=False,
             nocolor=True,
         )
