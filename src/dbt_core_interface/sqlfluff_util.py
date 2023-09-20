@@ -90,7 +90,7 @@ def lint_command(
             project_root,
             extra_config_path,
             ignore_local_config,
-            config_last_modification
+            config_last_modification,
             require_dialect=False,
             nocolor=True,
         )
