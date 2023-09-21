@@ -6215,9 +6215,9 @@ if lint_command:
                     if request.query.get("extra_config_path")
                     else None
                 ),
-                config_last_modification=(
-                    request.query.get("config_last_modification")
-                    if request.query.get("config_last_modification")
+                extra_config_last_modification=(
+                    request.query.get("extra_config_last_modification")
+                    if request.query.get("extra_config_last_modification")
                     else None
                 ),
             )

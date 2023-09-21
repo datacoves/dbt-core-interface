@@ -14,7 +14,6 @@ from sqlfluff.core.config import ConfigLoader, FluffConfig
 def get_linter(
     config: FluffConfig,
     stream: FileOutput,
-    config_last_modification: Optional[str] = None,
 ):
     """Get linter."""
     from sqlfluff.cli.commands import get_linter_and_formatter
@@ -28,7 +27,7 @@ def get_config(
     dbt_project_root: Path,
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
-    config_last_modification: Optional[str] = None,
+    extra_config_last_modification: Optional[str] = None,
     require_dialect: bool = True,
     **kwargs,
 ) -> FluffConfig:
@@ -40,6 +39,9 @@ def get_config(
     """
     overrides = {k: kwargs[k] for k in kwargs if kwargs[k] is not None}
     loader = ConfigLoader.get_global()
+
+    if extra_config_last_modification:
+        loader._config_cache.pop(str(extra_config_path), {})
 
     # Load config at project root
     base_config = loader.load_config_up_to_path(
@@ -61,7 +63,7 @@ def get_config(
     stream = FileOutput(config, os.devnull)
     atexit.register(stream.close)
 
-    return config, stream, config_last_modification
+    return config, stream
 
 
 def lint_command(
@@ -69,7 +71,7 @@ def lint_command(
     sql: Union[Path, str],
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
-    config_last_modification: Optional[str] = None,
+    extra_config_last_modification: Optional[str] = None,
 ) -> Optional[Dict]:
     """Lint specified file or SQL string.
 
@@ -91,7 +93,7 @@ def lint_command(
             project_root,
             extra_config_path,
             ignore_local_config,
-            config_last_modification,
+            extra_config_last_modification,
             require_dialect=False,
             nocolor=True,
         )
