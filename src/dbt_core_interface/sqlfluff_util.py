@@ -14,6 +14,7 @@ from sqlfluff.core.config import ConfigLoader, FluffConfig
 def get_linter(
     config: FluffConfig,
     stream: FileOutput,
+    config_last_modification: Optional[str] = None,
 ):
     """Get linter."""
     from sqlfluff.cli.commands import get_linter_and_formatter
@@ -60,7 +61,7 @@ def get_config(
     stream = FileOutput(config, os.devnull)
     atexit.register(stream.close)
 
-    return config, stream
+    return config, stream, config_last_modification
 
 
 def lint_command(
