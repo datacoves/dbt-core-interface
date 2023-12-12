@@ -1,3 +1,6 @@
+import difflib
+import os
+import shutil
 import urllib.parse
 from pathlib import Path
 
@@ -92,6 +95,58 @@ li""",
     response_json = response.json
     print(response_json)
     assert response_json == {"result": []}
+
+
+def test_format(profiles_dir, project_dir, sqlfluff_config_path, caplog):
+    sql_path = SQL_PATH
+
+    # Make a copy of the file and format the copy so we don't modify a file in
+    # git.
+    destination_path = sql_path.parent / f"{sql_path.stem + '_new'}{sql_path.suffix}"
+    shutil.copy(str(sql_path), str(destination_path))
+
+    # Format the temp copy
+    params = {"sql_path": destination_path}
+    kwargs = {}
+    data = ""
+    response = client.post(
+        f"/format?{urllib.parse.urlencode(params)}",
+        data,
+        headers={"X-dbt-Project": "dbt_project"},
+        **kwargs,
+    )
+    try:
+        assert response.status_code == 200
+
+        # Compare the two files and verify the expected changes were made.
+        original_lines = sql_path.read_text().splitlines()
+        formatted_lines = destination_path.read_text().splitlines()
+        differ = difflib.Differ()
+        diff = list(differ.compare(original_lines, formatted_lines))
+        assert diff == [
+            "  {{ config(materialized='view') }}",
+            "  ",
+            "  with cte_example as (",
+            "-      select 1 as col_name",
+            "? -\n",
+            "+     select 1 as col_name",
+            "  ),",
+            "  ",
+            "- final as",
+            "+ final as (",
+            "?         ++\n",
+            "- (",
+            "      select",
+            "          col_name,",
+            "          {{- echo('col_name') -}} as col_name2",
+            "      from",
+            "          cte_example",
+            "  )",
+            "  ",
+            "  select * from final",
+        ]
+    finally:
+        os.unlink(destination_path)
 
 
 @pytest.mark.parametrize(
