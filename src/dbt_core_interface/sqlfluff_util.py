@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from sqlfluff.cli.outputstream import FileOutput
+from sqlfluff.core import SQLLintError
 from sqlfluff.core.config import ConfigLoader, FluffConfig
 
 
@@ -17,7 +18,7 @@ def get_linter(
 ):
     """Get linter."""
     from sqlfluff.cli.commands import get_linter_and_formatter
-    return get_linter_and_formatter(config, stream)[0]
+    return get_linter_and_formatter(config, stream)
 
 # Cache config to prevent wasted frames
 @lru_cache(maxsize=50)
@@ -81,7 +82,7 @@ def lint_command(
     but for now this should provide maximum compatibility with the command-line
     tool. We can also propose changes to SQLFluff to make this easier.
     """
-    lnt = get_linter(
+    lnt, formatter = get_linter(
         *get_config(
             project_root,
             extra_config_path,
@@ -102,6 +103,77 @@ def lint_command(
         )
     records = result.as_records()
     return records[0] if records else None
+
+
+def format_command(
+    project_root: Path,
+    sql: Union[Path, str],
+    extra_config_path: Optional[Path] = None,
+    ignore_local_config: bool = False,
+) -> bool:
+    """Format specified file or SQL string.
+
+    This is essentially a streamlined version of the SQLFluff command-line
+    format function, sqlfluff.cli.commands.cli_format().
+
+    This function uses a few SQLFluff internals, but it should be relatively
+    stable. The initial plan was to use the public API, but that was not
+    behaving well initially. Small details about how SQLFluff handles .sqlfluff
+    and dbt_project.yaml file locations and overrides generate lots of support
+    questions, so it seems better to use this approach for now.
+
+    Eventually, we can look at using SQLFluff's public, high-level APIs,
+    but for now this should provide maximum compatibility with the command-line
+    tool. We can also propose changes to SQLFluff to make this easier.
+    """
+    lnt, formatter = get_linter(
+        *get_config(
+            project_root,
+            extra_config_path,
+            ignore_local_config,
+            require_dialect=False,
+            nocolor=True,
+            rules=(
+                # All of the capitalisation rules
+                "capitalisation,"
+                # All of the layout rules
+                "layout,"
+                # Safe rules from other groups
+                "ambiguous.union,"
+                "convention.not_equal,"
+                "convention.coalesce,"
+                "convention.select_trailing_comma,"
+                "convention.is_null,"
+                "jinja.padding,"
+                "structure.distinct,"
+            )
+        )
+    )
+
+    # Format a SQL file
+    assert isinstance(sql, Path)
+    lint_result = lnt.lint_paths(
+        paths=[str(sql)],
+        fix=True,
+        ignore_non_existent_files=False,
+        #processes=processes,
+        # If --force is set, then apply the changes as we go rather
+        # than waiting until the end.
+        apply_fixes=True,
+        #fixed_file_suffix=fixed_suffix,
+        fix_even_unparsable=False,
+    )
+    total_errors, num_filtered_errors = lint_result.count_tmp_prs_errors()
+    lint_result.discard_fixes_for_lint_errors_in_files_with_tmp_or_prs_errors()
+    success = not num_filtered_errors
+    if success:
+        num_fixable = lint_result.num_violations(types=SQLLintError, fixable=True)
+        if num_fixable > 0:
+            res = lint_result.persist_changes(
+                formatter=formatter, fixed_file_suffix=""
+            )
+        success = all(res.values())
+    return success
 
 
 def test_lint_command():
@@ -138,5 +210,33 @@ def test_lint_command():
     print(f"{'*'*40} Lint result {'*'*40}")
 
 
+def test_format_command():
+    """Quick and dirty functional test for format_command().
+
+    Handy for seeing SQLFluff logs if something goes wrong. The automated tests
+    make it difficult to see the logs.
+    """
+    logging.basicConfig(level=logging.DEBUG)
+    from dbt_core_interface.project import DbtProjectContainer
+    dbt = DbtProjectContainer()
+    dbt.add_project(
+        name_override="dbt_project",
+        project_dir="tests/sqlfluff_templater/fixtures/dbt/dbt_project/",
+        profiles_dir="tests/sqlfluff_templater/fixtures/dbt/profiles_yml/",
+        target="dev",
+    )
+    sql_path = Path(
+        "tests/sqlfluff_templater/fixtures/dbt/dbt_project/models/my_new_project/issue_1608.sql"
+    )
+    result = format_command(
+        Path("tests/sqlfluff_templater/fixtures/dbt/dbt_project"),
+        sql=sql_path,
+    )
+    print(f"{'*'*40} Formatting result {'*'*40}")
+    print(result)
+    print(f"{'*'*40} Formatting result {'*'*40}")
+
+
 if __name__ == "__main__":
-    test_lint_command()
+    #test_lint_command()
+    test_format_command()
