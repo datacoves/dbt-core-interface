@@ -6267,7 +6267,7 @@ if format_command:
             # NOTE: Formatting a string is not supported.
             LOGGER.info(f"formatting file: {sql_path}")
             sql = Path(sql_path)
-        if not sql:
+        if not sql_path:
             response.status = 400
             return {
                 "error": {
