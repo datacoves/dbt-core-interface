@@ -172,7 +172,7 @@ def format_command(
             res = lint_result.persist_changes(
                 formatter=formatter, fixed_file_suffix=""
             )
-        success = all(res.values())
+            success = all(res.values())
     return success
 
 
