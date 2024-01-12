@@ -3,10 +3,10 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 from sqlfluff.cli.outputstream import FileOutput
-from sqlfluff.core import SQLLintError
+from sqlfluff.core import SQLLintError, SQLTemplaterError
 from sqlfluff.core.config import ConfigLoader, FluffConfig
 
 
@@ -110,7 +110,7 @@ def format_command(
     sql: Union[Path, str],
     extra_config_path: Optional[Path] = None,
     ignore_local_config: bool = False,
-) -> bool:
+) -> Tuple[bool, Optional[str]]:
     """Format specified file or SQL string.
 
     This is essentially a streamlined version of the SQLFluff command-line
@@ -150,30 +150,43 @@ def format_command(
         )
     )
 
-    # Format a SQL file
-    assert isinstance(sql, Path)
-    lint_result = lnt.lint_paths(
-        paths=[str(sql)],
-        fix=True,
-        ignore_non_existent_files=False,
-        #processes=processes,
-        # If --force is set, then apply the changes as we go rather
-        # than waiting until the end.
-        apply_fixes=True,
-        #fixed_file_suffix=fixed_suffix,
-        fix_even_unparsable=False,
-    )
-    total_errors, num_filtered_errors = lint_result.count_tmp_prs_errors()
-    lint_result.discard_fixes_for_lint_errors_in_files_with_tmp_or_prs_errors()
-    success = not num_filtered_errors
-    if success:
-        num_fixable = lint_result.num_violations(types=SQLLintError, fixable=True)
-        if num_fixable > 0:
-            res = lint_result.persist_changes(
-                formatter=formatter, fixed_file_suffix=""
-            )
-            success = all(res.values())
-    return success
+    if isinstance(sql, str):
+        # Lint SQL passed in as a string
+        result = lnt.lint_string_wrapped(sql, fname="stdin", fix=True)
+        templater_error = result.num_violations(types=SQLTemplaterError) > 0
+        unfixable_error = result.num_violations(types=SQLLintError, fixable=False) > 0
+        total_errors, num_filtered_errors = result.count_tmp_prs_errors()
+        result.discard_fixes_for_lint_errors_in_files_with_tmp_or_prs_errors()
+        success = not num_filtered_errors
+        if result.num_violations(types=SQLLintError, fixable=True) > 0:
+            result_sql = result.paths[0].files[0].fix_string()[0]
+        else:
+            result_sql = sql
+    else:
+        # Format a SQL file
+        result_sql = None
+        lint_result = lnt.lint_paths(
+            paths=[str(sql)],
+            fix=True,
+            ignore_non_existent_files=False,
+            #processes=processes,
+            # If --force is set, then apply the changes as we go rather
+            # than waiting until the end.
+            apply_fixes=True,
+            #fixed_file_suffix=fixed_suffix,
+            fix_even_unparsable=False,
+        )
+        total_errors, num_filtered_errors = lint_result.count_tmp_prs_errors()
+        lint_result.discard_fixes_for_lint_errors_in_files_with_tmp_or_prs_errors()
+        success = not num_filtered_errors
+        if success:
+            num_fixable = lint_result.num_violations(types=SQLLintError, fixable=True)
+            if num_fixable > 0:
+                res = lint_result.persist_changes(
+                    formatter=formatter, fixed_file_suffix=""
+                )
+                success = all(res.values())
+    return success, result_sql
 
 
 def test_lint_command():
@@ -228,6 +241,16 @@ def test_format_command():
     sql_path = Path(
         "tests/sqlfluff_templater/fixtures/dbt/dbt_project/models/my_new_project/issue_1608.sql"
     )
+
+    # Test formatting a string
+    success, result_sql = format_command(
+        Path("tests/sqlfluff_templater/fixtures/dbt/dbt_project"),
+        sql=sql_path.read_text(),
+    )
+    print(f"{'*'*40} Formatting result {'*'*40}")
+    print(success, result_sql)
+
+    # Test formatting a file
     result = format_command(
         Path("tests/sqlfluff_templater/fixtures/dbt/dbt_project"),
         sql=sql_path,

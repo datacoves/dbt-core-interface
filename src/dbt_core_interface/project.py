@@ -6267,19 +6267,23 @@ if format_command:
             # NOTE: Formatting a string is not supported.
             LOGGER.info(f"formatting file: {sql_path}")
             sql = Path(sql_path)
-        if not sql_path:
+        else:
+            # Format a string
+            LOGGER.info(f"formatting string")
+            sql = request.body.getvalue().decode("utf-8")
+        if not sql:
             response.status = 400
             return {
                 "error": {
                     "data": {},
                     "message": (
-                        "No SQL file provided. Must provide a SQL file path."
+                        "No SQL provided. Either provide a SQL file path or a SQL string to lint."
                     ),
                 }
             }
         try:
             LOGGER.info(f"Calling format_command()")
-            format_command(
+            temp_result, formatted_sql = format_command(
                 Path(project_runner.config.project_root),
                 sql=sql,
                 extra_config_path=(
@@ -6299,7 +6303,7 @@ if format_command:
             }
         else:
             LOGGER.info(f"Formatting succeeded")
-            format_result = {"result": None}
+            format_result = {"result": temp_result, "sql": formatted_sql}
         return format_result
 
 

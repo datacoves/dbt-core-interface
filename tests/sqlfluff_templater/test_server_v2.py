@@ -27,8 +27,8 @@ SQL_PATH = (
 @pytest.mark.parametrize(
     "param_name, param_value",
     [
-        ("sql_path", SQL_PATH),
-        (None, SQL_PATH.read_text()),
+        pytest.param("sql_path", SQL_PATH, id="sql_file"),
+        pytest.param(None, SQL_PATH.read_text(), id="sql_string"),
     ],
 )
 def test_lint(param_name, param_value, profiles_dir, project_dir, sqlfluff_config_path, caplog):
@@ -97,18 +97,31 @@ li""",
     assert response_json == {"result": []}
 
 
-def test_format(profiles_dir, project_dir, sqlfluff_config_path, caplog):
-    sql_path = SQL_PATH
+@pytest.mark.parametrize(
+    "param_name, param_value",
+    [
+        pytest.param("sql_path", SQL_PATH, id="sql_file"),
+        pytest.param(None, SQL_PATH.read_text(), id="sql_string"),
+    ],
+)
+def test_format(param_name, param_value, profiles_dir, project_dir, sqlfluff_config_path, caplog):
+    if param_name:
+        # Make a copy of the file and format the copy so we don't modify a file in
+        # git.
+        destination_path = param_value.parent / f"{param_value.stem + '_new'}{param_value.suffix}"
+        shutil.copy(str(param_value), str(destination_path))
+        param_value = destination_path
 
-    # Make a copy of the file and format the copy so we don't modify a file in
-    # git.
-    destination_path = sql_path.parent / f"{sql_path.stem + '_new'}{sql_path.suffix}"
-    shutil.copy(str(sql_path), str(destination_path))
-
-    # Format the temp copy
-    params = {"sql_path": destination_path}
+    params = {}
     kwargs = {}
-    data = ""
+    data = ''
+    if param_name:
+        # Formatting a file
+        params[param_name] = param_value
+        original_lines = param_value.read_text().splitlines()
+    else:
+        data = param_value
+        original_lines = param_value.splitlines()
     response = client.post(
         f"/format?{urllib.parse.urlencode(params)}",
         data,
@@ -118,9 +131,11 @@ def test_format(profiles_dir, project_dir, sqlfluff_config_path, caplog):
     try:
         assert response.status_code == 200
 
-        # Compare the two files and verify the expected changes were made.
-        original_lines = sql_path.read_text().splitlines()
-        formatted_lines = destination_path.read_text().splitlines()
+        # Compare "before and after" SQL and verify the expected changes were made.
+        if param_name:
+            formatted_lines = destination_path.read_text().splitlines()
+        else:
+            formatted_lines = response.json["sql"].splitlines()
         differ = difflib.Differ()
         diff = list(differ.compare(original_lines, formatted_lines))
         assert diff == [
@@ -146,7 +161,8 @@ def test_format(profiles_dir, project_dir, sqlfluff_config_path, caplog):
             "  select * from final",
         ]
     finally:
-        os.unlink(destination_path)
+        if param_name:
+            os.unlink(destination_path)
 
 
 @pytest.mark.parametrize(
