@@ -6331,7 +6331,13 @@ def run_server(runner: Optional[DbtProject] = None, host="localhost", port=8581)
 if __name__ == "__main__":
     import argparse
 
-    # logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
+
+    # Configure logging for 'dbt_core_interface' and 'dbt_core_interface.sqlfluff_util'
+    for logger_name in ['dbt_core_interface', 'dbt_core_interface.sqlfluff_util']:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.INFO)
+
     parser = argparse.ArgumentParser(
         description="Run the dbt interface server. Defaults to the WSGIRefServer"
     )

@@ -1,6 +1,7 @@
 import atexit
 import logging
 import os
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
@@ -8,6 +9,9 @@ from typing import Dict, Optional, Tuple, Union
 from sqlfluff.cli.outputstream import FileOutput
 from sqlfluff.core import SQLLintError, SQLTemplaterError
 from sqlfluff.core.config import ConfigLoader, FluffConfig
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 # Cache linters (up to 50 though its arbitrary)
@@ -126,6 +130,12 @@ def format_command(
     but for now this should provide maximum compatibility with the command-line
     tool. We can also propose changes to SQLFluff to make this easier.
     """
+    LOGGER.info(f"""format_command(
+    {project_root},
+    {str(sql)[:100]},
+    {extra_config_path},
+    {ignore_local_config})
+""")
     lnt, formatter = get_linter(
         *get_config(
             project_root,
@@ -152,18 +162,22 @@ def format_command(
 
     if isinstance(sql, str):
         # Lint SQL passed in as a string
+        LOGGER.info(f"Formatting SQL string: {sql[:100]}")
         result = lnt.lint_string_wrapped(sql, fname="stdin", fix=True)
-        templater_error = result.num_violations(types=SQLTemplaterError) > 0
-        unfixable_error = result.num_violations(types=SQLLintError, fixable=False) > 0
         total_errors, num_filtered_errors = result.count_tmp_prs_errors()
         result.discard_fixes_for_lint_errors_in_files_with_tmp_or_prs_errors()
         success = not num_filtered_errors
-        if result.num_violations(types=SQLLintError, fixable=True) > 0:
+        num_fixable = result.num_violations(types=SQLLintError, fixable=True)
+        if num_fixable > 0:
+            LOGGER.info(f"Fixing {num_fixable} errors in SQL string")
             result_sql = result.paths[0].files[0].fix_string()[0]
+            LOGGER.info(f"Result string has changes? {result_sql != sql}")
         else:
+            LOGGER.info("No fixable errors in SQL string")
             result_sql = sql
     else:
         # Format a SQL file
+        LOGGER.info(f"Formatting SQL file: {sql}")
         result_sql = None
         lint_result = lnt.lint_paths(
             paths=[str(sql)],
@@ -182,10 +196,17 @@ def format_command(
         if success:
             num_fixable = lint_result.num_violations(types=SQLLintError, fixable=True)
             if num_fixable > 0:
+                LOGGER.info(f"Fixing {num_fixable} errors in SQL file")
+                before_modified = datetime.fromtimestamp(sql.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                LOGGER.info(f"Before fixing, modified: {before_modified}")
                 res = lint_result.persist_changes(
                     formatter=formatter, fixed_file_suffix=""
                 )
+                after_modified = datetime.fromtimestamp(sql.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                LOGGER.info(f"After fixing, modified: {after_modified}")
+                LOGGER.info(f"File modification time has changes? {before_modified != after_modified}")
                 success = all(res.values())
+    LOGGER.info(f"format_command returning success={success}, result_sql={result_sql[:100] if result_sql is not None else 'n/a'}")
     return success, result_sql
 
 
