@@ -178,6 +178,8 @@ def format_command(
     else:
         # Format a SQL file
         LOGGER.info(f"Formatting SQL file: {sql}")
+        before_modified = datetime.fromtimestamp(sql.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        LOGGER.info(f"Before fixing, modified: {before_modified}")
         result_sql = None
         lint_result = lnt.lint_paths(
             paths=[str(sql)],
@@ -197,8 +199,6 @@ def format_command(
             num_fixable = lint_result.num_violations(types=SQLLintError, fixable=True)
             if num_fixable > 0:
                 LOGGER.info(f"Fixing {num_fixable} errors in SQL file")
-                before_modified = datetime.fromtimestamp(sql.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                LOGGER.info(f"Before fixing, modified: {before_modified}")
                 res = lint_result.persist_changes(
                     formatter=formatter, fixed_file_suffix=""
                 )
@@ -206,6 +206,8 @@ def format_command(
                 LOGGER.info(f"After fixing, modified: {after_modified}")
                 LOGGER.info(f"File modification time has changes? {before_modified != after_modified}")
                 success = all(res.values())
+            else:
+                LOGGER.info("No fixable errors in SQL file")
     LOGGER.info(f"format_command returning success={success}, result_sql={result_sql[:100] if result_sql is not None else 'n/a'}")
     return success, result_sql
 
