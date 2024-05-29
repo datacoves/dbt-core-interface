@@ -21,10 +21,6 @@ class DatacovesConfigLoader(ConfigLoader):
                 f"Extra config '{extra_config_path}' does not exist."
             )
 
-        # First check the cache
-        # if str(extra_config_path) in self._config_cache:
-        #     return self._config_cache[str(extra_config_path)] # TODO here
-
         configs: Dict[str, Any] = {}
         if extra_config_path.endswith("pyproject.toml"):
             elems = self._get_config_elems_from_toml(extra_config_path)
@@ -63,7 +59,7 @@ def get_config(
     directory.
     """
     overrides = {k: kwargs[k] for k in kwargs if kwargs[k] is not None}
-    loader = DatacovesConfigLoader()
+    loader = DatacovesConfigLoader().get_global()
 
     # Load config at project root
     base_config = loader.load_config_up_to_path(
