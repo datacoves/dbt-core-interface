@@ -704,7 +704,7 @@ class DbtProject:
         This is a context manager that will clear the node after execution and leverages a mutex during manifest mutation.
         """
         # Remove {% ... %} patterns from the SQL string
-        sql = re.sub(r'{%.*?%}', '', sql, flags=re.DOTALL)
+        sql = re.sub(r'{%\s*(?:snapshot\s+.*?\s*|endsnapshot\s*)%}', '', sql, flags=re.DOTALL)
         with self.manifest_mutation_mutex:
             self._clear_node(node_name)
             sql_node = self.sql_parser.parse_remote(sql, node_name)
@@ -5937,10 +5937,26 @@ def run_sql(runners: DbtProjectContainer) -> Union[ServerRunResult, ServerErrorC
         column_types=[column._data_type for column in new_columns],
         row_names=new_columns[0]._keys,
     )
+
+    # Define the mapping between Agate column types and Tabulator column types
+    AGATE_TO_TABULATOR_TYPE_MAP = {
+        "Text": 'string',
+        "Number": 'number',
+        "Boolean": 'boolean',
+        "Date": 'date',
+        "DateTime": 'datetime',
+        "TimeDelta": 'time',
+    }
+    # change column_names to a dictionary of column names and their types
+    name_type_union = {
+        column_name: AGATE_TO_TABULATOR_TYPE_MAP.get(column_type.__class__.__name__, 'string')
+        for column_name, column_type in zip(new_table.column_names, new_table.column_types)
+    }
     return asdict(
         ServerRunResult(
             rows=[list(row) for row in new_table.rows],
-            column_names=new_table.column_names,
+            # column_names=new_table.column_names,
+            column_names=name_type_union,
             executed_code=compiled_query.strip(),
             raw_code=query,
         )
