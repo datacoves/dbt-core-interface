@@ -284,12 +284,13 @@ def run_sql(
         comp_res = runner.compile_sql(raw_sql)
     try:
         model_context = runner.generate_runtime_model_context(comp_res.node)
+        compiled_code = f"select * from ({model_context['compiled_code']}) as __server_query"
         query = runner.adapter.execute_macro(
             macro_name="get_show_sql",
             macro_resolver=runner.manifest,
             context_override=model_context,
             kwargs={
-                "compiled_code": model_context["compiled_code"],
+                "compiled_code": compiled_code,
                 "sql_header": model_context["config"].get("sql_header"),
                 "limit": limit,
             },
