@@ -77,7 +77,7 @@ def _set_invocation_context() -> None:
 _set_invocation_context()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO))
 logger.addHandler(rich.logging.RichHandler())
 
 add_logger_to_manager(
