@@ -484,9 +484,14 @@ def parse_project(
 
 
 @app.get("/health")  # legacy extension support
+def health() -> dict[str, t.Any]:
+    """Health check for vscode-sqlfluff extension. Always returns ready if server is running."""
+    return {"result": {"status": "ready"}}
+
+
 @app.get("/api/v1/status")
 def status(runner: DbtProject = Depends(_get_runner)) -> dict[str, t.Any]:
-    """Health check endpoint to verify server status."""
+    """Status endpoint with project details."""
     return {
         "result": {
             "status": "ready",
