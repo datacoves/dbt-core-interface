@@ -45,6 +45,14 @@ class DbtTemplater(JinjaTemplater):
         """Gets the dbt version."""
         return self._dbt_version.to_version_string()
 
+    def _apply_dbt_builtins(self, config: FluffConfig | None) -> bool:
+        """DbtTemplater uses actual dbt compilation, not FunctionWrapper placeholders.
+
+        Returning False prevents SQLFluff from adding FunctionWrapper objects
+        (which lack .get() method) to the Jinja environment during slice_file analysis.
+        """
+        return False
+
     @large_file_check
     def process(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,

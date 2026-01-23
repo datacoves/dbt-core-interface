@@ -9,6 +9,7 @@ v2 server.py if we ever want/need to change the interface.
 import json
 import logging
 import os
+import re
 import time
 import typing as t
 import uuid
@@ -284,17 +285,31 @@ def run_sql(
         comp_res = runner.compile_sql(raw_sql)
     try:
         model_context = runner.generate_runtime_model_context(comp_res.node)
-        query = runner.adapter.execute_macro(
-            macro_name="get_show_sql",
-            macro_resolver=runner.manifest,
-            context_override=model_context,
-            kwargs={
-                "compiled_code": model_context["compiled_code"],
-                "sql_header": model_context["config"].get("sql_header"),
-                "limit": limit,
-            },
-        )
+        original_code = model_context["compiled_code"]
+        sql_header = model_context["config"].get("sql_header") or ""
+
+        # Check if query already has a LIMIT clause at the end - if so, execute as-is
+        query: str
+        has_limit = bool(re.search(r"\slimit\s+\d+(\s+offset\s+\d+)?\s*;?\s*$", original_code, re.IGNORECASE))
+
+        if has_limit:
+            query = f"{sql_header}\n{original_code}" if sql_header else original_code
+
+        else:
+            # Wrap in subquery to safely apply limit
+            compiled_code = f"select * from ({original_code}) as __server_query"
+            query = runner.adapter.execute_macro(
+                macro_name="get_show_sql",
+                macro_resolver=runner.manifest,
+                context_override=model_context,
+                kwargs={
+                    "compiled_code": compiled_code,
+                    "sql_header": sql_header,
+                    "limit": limit,
+                },
+            )
         exec_res = runner.execute_sql(t.cast(str, query), compile=False)  # pyright: ignore[reportInvalidCast]
+
     except Exception as e:
         response.status_code = 500
         return ServerErrorContainer(
@@ -469,9 +484,14 @@ def parse_project(
 
 
 @app.get("/health")  # legacy extension support
+def health() -> dict[str, t.Any]:
+    """Health check for vscode-sqlfluff extension. Always returns ready if server is running."""
+    return {"result": {"status": "ready"}}
+
+
 @app.get("/api/v1/status")
 def status(runner: DbtProject = Depends(_get_runner)) -> dict[str, t.Any]:
-    """Health check endpoint to verify server status."""
+    """Status endpoint with project details."""
     return {
         "result": {
             "status": "ready",
