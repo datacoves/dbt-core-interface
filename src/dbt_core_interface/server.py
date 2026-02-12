@@ -288,9 +288,13 @@ def run_sql(
         original_code = model_context["compiled_code"]
         sql_header = model_context["config"].get("sql_header") or ""
 
-        # Check if query already has a LIMIT clause at the end - if so, execute as-is
+        # Check if query already has a row-limiting clause - if so, execute as-is
         query: str
-        has_limit = bool(re.search(r"\slimit\s+\d+(\s+offset\s+\d+)?\s*;?\s*$", original_code, re.IGNORECASE))
+        has_limit = bool(
+            re.search(r"\slimit\s+\d+(\s+offset\s+\d+)?\s*;?\s*$", original_code, re.IGNORECASE)
+            or re.search(r"^\s*select\s+top\s+\(?\d+\)?", original_code, re.IGNORECASE)
+            or re.search(r"fetch\s+(?:first|next)\s+\d+\s+rows?\s+only\s*;?\s*$", original_code, re.IGNORECASE)
+        )
 
         if has_limit:
             query = f"{sql_header}\n{original_code}" if sql_header else original_code
