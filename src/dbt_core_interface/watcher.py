@@ -116,6 +116,7 @@ class DbtProjectWatcher:
             try:
                 change_level = self._check_for_changes()
                 if change_level:
+                    logger.info(f"Reparsing project (change_level={change_level})")
                     self._project.parse_project(
                         write_manifest=True, reparse_configuration=change_level > 1
                     )
@@ -160,6 +161,7 @@ class DbtProjectWatcher:
                 stamped_mtime = self._mtimes.get(path)
                 if stamped_mtime is None or current_mtime != stamped_mtime:
                     self._mtimes[path] = current_mtime
+                    logger.info(f"Config change detected: {path}")
                     return 2
             except OSError as e:
                 logger.warning(f"Error checking file {path}: {e}")
