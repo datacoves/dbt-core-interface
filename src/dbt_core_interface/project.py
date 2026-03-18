@@ -532,6 +532,7 @@ class DbtProject:
                     self._args,
                     profiles_dir=_get_profiles_dir(self.project_root),
                 )
+            set_from_args(self._args, None)  # pyright: ignore[reportArgumentType]
             self.runtime_config = RuntimeConfig.from_args(self._args)
             self.__manifest_loader = ManifestLoader(
                 self.runtime_config,
