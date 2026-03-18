@@ -519,6 +519,10 @@ class DbtProject:
     ) -> None:
         """Parse the dbt project and load manifest."""
         if reparse_configuration:
+            self._args = dc_replace(
+                self._args,
+                profiles_dir=_get_profiles_dir(self.project_root),
+            )
             self.runtime_config = RuntimeConfig.from_args(self._args)
             self.__manifest_loader = ManifestLoader(
                 self.runtime_config,

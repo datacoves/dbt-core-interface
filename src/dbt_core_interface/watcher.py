@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import typing as t
 import weakref
@@ -123,6 +124,16 @@ class DbtProjectWatcher:
 
             _ = self._stop_event.wait(self.check_interval)
 
+    def _all_profiles_yml_paths(self) -> list[Path]:
+        """Return all potential profiles.yml paths in priority order."""
+        paths = []
+        env_dir = os.environ.get("DBT_PROFILES_DIR")
+        if env_dir:
+            paths.append(Path(env_dir).expanduser().resolve() / "profiles.yml")
+        paths.append(self._project_or_raise.project_root / "profiles.yml")
+        paths.append(Path.home() / ".dbt" / "profiles.yml")
+        return paths
+
     def _initialize_file_mtimes(self) -> None:
         """Initialize the file modification time tracking."""
         for f_proxy in self._project_or_raise.manifest.files.values():
@@ -132,9 +143,8 @@ class DbtProjectWatcher:
         self._mtimes[self._project_or_raise.dbt_project_yml] = (
             self._project_or_raise.dbt_project_yml.stat().st_mtime
         )
-        self._mtimes[self._project_or_raise.profiles_yml] = (
-            self._project_or_raise.profiles_yml.stat().st_mtime
-        )
+        for path in self._all_profiles_yml_paths():
+            self._mtimes[path] = path.stat().st_mtime if path.exists() else 0.0
         logger.debug(f"Initialized tracking for {len(self._mtimes)} files")
 
     def _check_for_changes(self) -> int:
@@ -143,11 +153,12 @@ class DbtProjectWatcher:
         A return value of 0 means no changes, 1 means files were added/removed, and 2 means
         a configuration file was modified (dbt_project.yml or profiles.yml).
         """
-        for path in (self._project_or_raise.dbt_project_yml, self._project_or_raise.profiles_yml):
+        config_paths = [self._project_or_raise.dbt_project_yml, *self._all_profiles_yml_paths()]
+        for path in config_paths:
             try:
                 current_mtime = path.stat().st_mtime if path.exists() else 0.0
                 stamped_mtime = self._mtimes.get(path)
-                if stamped_mtime is None or current_mtime > stamped_mtime:
+                if stamped_mtime is None or current_mtime != stamped_mtime:
                     self._mtimes[path] = current_mtime
                     return 2
             except OSError as e:
