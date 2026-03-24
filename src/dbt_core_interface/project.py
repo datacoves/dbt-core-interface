@@ -546,10 +546,29 @@ class DbtProject:
             self.__manifest_loader.manifest.state_check = (
                 self.__manifest_loader.build_manifest_state_check()
             )
-            self._manifest = self.__manifest_loader.saved_manifest = self.__manifest_loader.load()
-            if not self.__manifest_loader.skip_parsing:
-                self._manifest.build_flat_graph()
-                self._manifest.build_group_map()
+            try:
+                self._manifest = self.__manifest_loader.saved_manifest = (
+                    self.__manifest_loader.load()
+                )
+                if not self.__manifest_loader.skip_parsing:
+                    self._manifest.build_flat_graph()
+                    self._manifest.build_group_map()
+            except Exception:
+                if self.__manifest_loader.saved_manifest is not None:
+                    logger.warning("Partial parse failed, forcing full reparse")
+                    self.__manifest_loader.saved_manifest = None
+                    self.__manifest_loader.manifest = Manifest()
+                    self.__manifest_loader.manifest.state_check = (
+                        self.__manifest_loader.build_manifest_state_check()
+                    )
+                    self._manifest = self.__manifest_loader.saved_manifest = (
+                        self.__manifest_loader.load()
+                    )
+                    if not self.__manifest_loader.skip_parsing:
+                        self._manifest.build_flat_graph()
+                        self._manifest.build_group_map()
+                else:
+                    raise
 
             self._sql_parser = None
             self._macro_parser = None
