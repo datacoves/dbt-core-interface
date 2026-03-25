@@ -556,10 +556,9 @@ class DbtProject:
             except Exception:
                 if self.__manifest_loader.saved_manifest is not None:
                     logger.warning("Partial parse failed, forcing full reparse")
-                    self.__manifest_loader.saved_manifest = None
-                    self.__manifest_loader.manifest = Manifest()
-                    self.__manifest_loader.manifest.state_check = (
-                        self.__manifest_loader.build_manifest_state_check()
+                    self.__manifest_loader = ManifestLoader(
+                        self.runtime_config,
+                        self.runtime_config.load_dependencies(),
                     )
                     self._manifest = self.__manifest_loader.saved_manifest = (
                         self.__manifest_loader.load()
