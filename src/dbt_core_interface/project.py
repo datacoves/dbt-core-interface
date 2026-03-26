@@ -375,9 +375,9 @@ class DbtProject:
         """Set the args for the DbtProject instance and update runtime config."""
         if isinstance(value, dict):
             value = dc_replace(self._args, **value)
+        self._args = value
         set_from_args(value, None)  # pyright: ignore[reportArgumentType]
         self.parse_project(write_manifest=True, reparse_configuration=True)
-        self._args = value
 
     def set_args(self, **kwargs: t.Any) -> None:
         """Set the args for the DbtProject instance."""
@@ -519,6 +519,20 @@ class DbtProject:
     ) -> None:
         """Parse the dbt project and load manifest."""
         if reparse_configuration:
+            current = Path(self._args.profiles_dir).resolve()
+            standard_dirs = {
+                self.project_root.resolve(),
+                (Path.home() / ".dbt").resolve(),
+            }
+            env_dir = os.environ.get("DBT_PROFILES_DIR")
+            if env_dir:
+                standard_dirs.add(Path(env_dir).expanduser().resolve())
+            if current in standard_dirs:
+                self._args = dc_replace(
+                    self._args,
+                    profiles_dir=_get_profiles_dir(self.project_root),
+                )
+            set_from_args(self._args, None)  # pyright: ignore[reportArgumentType]
             self.runtime_config = RuntimeConfig.from_args(self._args)
             self.__manifest_loader = ManifestLoader(
                 self.runtime_config,
@@ -532,10 +546,28 @@ class DbtProject:
             self.__manifest_loader.manifest.state_check = (
                 self.__manifest_loader.build_manifest_state_check()
             )
-            self._manifest = self.__manifest_loader.saved_manifest = self.__manifest_loader.load()
-            if not self.__manifest_loader.skip_parsing:
-                self._manifest.build_flat_graph()
-                self._manifest.build_group_map()
+            try:
+                self._manifest = self.__manifest_loader.saved_manifest = (
+                    self.__manifest_loader.load()
+                )
+                if not self.__manifest_loader.skip_parsing:
+                    self._manifest.build_flat_graph()
+                    self._manifest.build_group_map()
+            except Exception:
+                if self.__manifest_loader.saved_manifest is not None:
+                    logger.warning("Partial parse failed, forcing full reparse")
+                    self.__manifest_loader = ManifestLoader(
+                        self.runtime_config,
+                        self.runtime_config.load_dependencies(),
+                    )
+                    self._manifest = self.__manifest_loader.saved_manifest = (
+                        self.__manifest_loader.load()
+                    )
+                    if not self.__manifest_loader.skip_parsing:
+                        self._manifest.build_flat_graph()
+                        self._manifest.build_group_map()
+                else:
+                    raise
 
             self._sql_parser = None
             self._macro_parser = None

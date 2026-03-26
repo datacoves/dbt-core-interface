@@ -38,6 +38,7 @@ from dbt_core_interface.project import (
     DbtConfiguration,
     DbtProject,
     ExecutionResult,
+    _get_profiles_dir,
 )
 from dbt_core_interface.watcher import DbtProjectWatcher
 
@@ -136,10 +137,26 @@ def _load_saved_state(runners: DbtProjectContainer) -> None:
             project_name = t.cast(str, entry.get("project"))
             if not project_name:
                 continue
+            project_dir = entry.get("project_dir")
+            saved_profiles_dir = entry.get("profiles_dir")
+            if saved_profiles_dir:
+                saved_path = Path(saved_profiles_dir).resolve()
+                standard_dirs: set[Path] = {(Path.home() / ".dbt").resolve()}
+                if project_dir:
+                    standard_dirs.add(Path(project_dir).resolve())
+                env_dir = os.environ.get("DBT_PROFILES_DIR")
+                if env_dir:
+                    standard_dirs.add(Path(env_dir).expanduser().resolve())
+                if saved_path in standard_dirs:
+                    profiles_dir = _get_profiles_dir(project_dir)
+                else:
+                    profiles_dir = saved_profiles_dir
+            else:
+                profiles_dir = _get_profiles_dir(project_dir)
             kwargs: dict[str, t.Any] = {
                 "target": entry.get("target"),
-                "profiles_dir": entry.get("profiles_dir"),
-                "project_dir": entry.get("project_dir"),
+                "project_dir": project_dir,
+                "profiles_dir": profiles_dir,
                 "threads": entry.get("threads", 1),
                 "vars": entry.get("vars", {}),
             }
