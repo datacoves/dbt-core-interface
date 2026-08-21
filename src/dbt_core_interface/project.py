@@ -518,6 +518,7 @@ class DbtProject:
         self, write_manifest: bool = False, reparse_configuration: bool = False
     ) -> None:
         """Parse the dbt project and load manifest."""
+        _set_invocation_context()
         if reparse_configuration:
             current = Path(self._args.profiles_dir).resolve()
             standard_dirs = {
