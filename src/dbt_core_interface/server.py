@@ -529,7 +529,7 @@ def status(runner: DbtProject = Depends(_get_runner)) -> dict[str, t.Any]:
 @app.get("/api/v1/heartbeat")
 def heartbeat() -> dict[str, t.Any]:
     """Heartbeat endpoint to check server availability."""
-    return {"result": {"status": "ready"}}
+    return {"result": {"status": "ready", **DbtProjectWatcher.reload_status()}}
 
 
 class ServerLintResult(BaseModel):
