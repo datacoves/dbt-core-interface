@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 import typing as t
 import weakref
 from pathlib import Path
@@ -50,6 +51,9 @@ class DbtProjectWatcher:
         self.reader = project.create_reader()
 
         self._mtimes: dict[Path, float] = {}
+        self.reload_count: int = 0
+        self.last_reload_at: float = 0.0
+        self.last_reload_path: str = ""
         self._running = False
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -120,6 +124,9 @@ class DbtProjectWatcher:
                     self._project.parse_project(
                         write_manifest=True, reparse_configuration=change_level > 1
                     )
+                    if change_level > 1:
+                        self.reload_count += 1
+                        self.last_reload_at = time.time()
             except Exception as e:
                 logger.error(f"Error in project watcher loop: {e}")
 
@@ -161,6 +168,7 @@ class DbtProjectWatcher:
                 stamped_mtime = self._mtimes.get(path)
                 if stamped_mtime is None or current_mtime != stamped_mtime:
                     self._mtimes[path] = current_mtime
+                    self.last_reload_path = str(path)
                     logger.info(f"Config change detected: {path}")
                     return 2
             except OSError as e:
@@ -234,6 +242,20 @@ class DbtProjectWatcher:
                     watcher.stop()
                 else:
                     logger.warning(f"No watcher found for project at {path}")
+
+    @classmethod
+    def reload_status(cls) -> dict[str, t.Any]:
+        """Aggregate configuration reload counters across every active watcher."""
+        with cls._instance_lock:
+            watchers = list(cls._instances.values())
+        if not watchers:
+            return {"config_reload_count": 0, "config_reload_at": 0.0, "config_reload_path": ""}
+        latest = max(watchers, key=lambda w: w.last_reload_at)
+        return {
+            "config_reload_count": sum(w.reload_count for w in watchers),
+            "config_reload_at": latest.last_reload_at,
+            "config_reload_path": latest.last_reload_path,
+        }
 
     @classmethod
     def active_watchers(cls) -> list[DbtProjectWatcher]:
