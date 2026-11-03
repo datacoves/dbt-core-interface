@@ -8,7 +8,6 @@ import atexit
 import contextlib
 import functools
 import gc
-import json
 import re
 import logging
 import os
@@ -330,6 +329,7 @@ class DbtProject:
 
     @classmethod
     def setup_logging(cls, level: int = logging.DEBUG) -> logging.Logger:
+        """Configure the package logger with a Rich handler."""
         logger = logging.getLogger(__name__)
         logger.setLevel(level)
 
@@ -729,8 +729,8 @@ class DbtProject:
     ) -> tuple[ManifestNode, t.Callable[[], None]]:
         """Create a temporary node for SQL execution/compilation."""
         # Remove only the opening and closing snapshot tags, keep the body
-        sql = re.sub(r'{%\s*snapshot\b.*?%}', '', sql, flags=re.DOTALL)
-        sql = re.sub(r'{%\s*endsnapshot\s*%}', '', sql, flags=re.DOTALL)
+        sql = re.sub(r"{%\s*snapshot\b.*?%}", "", sql, flags=re.DOTALL)
+        sql = re.sub(r"{%\s*endsnapshot\s*%}", "", sql, flags=re.DOTALL)
         node_id = node_id or f"temp_node_{uuid.uuid4().hex[:8]}"
         sql_node = self.sql_parser.parse_remote(sql, node_id)
         process_node(self.runtime_config, self.manifest, sql_node)
@@ -764,8 +764,7 @@ class DbtProject:
 
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(path, "w") as f:
-            json.dump(self.manifest.writable_manifest().to_dict(), f, separators=(",", ":"))
+        self.manifest.writable_manifest().write(str(path))
 
         logger.info(f"Wrote manifest to {path}")
 
