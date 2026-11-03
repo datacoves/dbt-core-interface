@@ -1,6 +1,10 @@
 """Test cases for the project module."""
 
+import json
 import logging
+from datetime import datetime
+
+from dbt_core_interface import DbtProject
 
 
 def test_import_succeeds() -> None:
@@ -23,6 +27,8 @@ def test_logging_not_configured_at_import() -> None:
     adding RichHandler to dbt's logger.
     """
     from dbt_core_interface import project
+
+    _ = project
 
     logger = logging.getLogger("dbt_core_interface.project")
 
@@ -67,3 +73,23 @@ def test_setup_logging_idempotent() -> None:
     assert handler_count_after_second_call == handler_count_after_first_call, (
         "setup_logging should be idempotent - should not add duplicate handlers"
     )
+
+
+def test_write_manifest_serializes_datetime(tmp_path) -> None:
+    """Verify write_manifest writes a manifest holding a datetime as valid JSON."""
+    project = DbtProject(
+        project_dir="tests/sqlfluff_templater/fixtures/dbt/dbt_project",
+        profiles_dir="tests/sqlfluff_templater/fixtures/dbt/profiles_yml",
+        target="dev",
+    )
+    node = next(n for n in project.manifest.nodes.values() if n.resource_type == "model")
+    node.config.meta["written_at"] = datetime(2025, 6, 26)
+    try:
+        project.write_manifest(tmp_path)
+    finally:
+        del node.config.meta["written_at"]
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    written_at = manifest["nodes"][node.unique_id]["config"]["meta"]["written_at"]
+
+    assert written_at == "2025-06-26T00:00:00"
